@@ -33,6 +33,12 @@ export default function Home() {
   const handleImageCapture = async (file: File) => {
     console.log("📸 [HOME] handleImageCapture called with file:", file.name, file.type, file.size)
     
+    // Prevent processing if already processing another image
+    if (isProcessing) {
+      console.warn("⚠️ [HOME] Already processing an image, ignoring new selection")
+      return
+    }
+    
     // Cleanup previous blob URL if it exists
     if (imageUrlRef.current) {
       URL.revokeObjectURL(imageUrlRef.current)
@@ -40,10 +46,12 @@ export default function Home() {
     }
     
     console.log("📸 [HOME] Setting state: imageFile, isProcessing=true, clearing result and error")
+    // Clear previous state first, then set new state
+    // Use batch update to ensure all state changes happen together
+    setError(null)
+    setResult("")
     setImageFile(file)
     setIsProcessing(true)
-    setResult("")
-    setError(null)
 
     try {
       // Create form data
@@ -181,11 +189,15 @@ export default function Home() {
       imageUrlRef.current = null
     }
     
-    setImageFile(null)
-    setIsProcessing(false)
-    setResult("")
+    // Clear all state - React will batch these updates
     setError(null)
-    setCameraKey(prev => prev + 1) // Force CameraCapture remount
+    setResult("")
+    setIsProcessing(false)
+    setImageFile(null)
+    
+    // Increment key to force CameraCapture remount
+    // This happens in the same render cycle, so it's safe
+    setCameraKey(prev => prev + 1)
     console.log("🔄 [HOME] State cleared, cameraKey incremented")
   }
 
@@ -200,9 +212,9 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Camera Capture - Show when no image is being processed and no results/errors */}
+        {/* Camera Capture - Show when ready to capture (no active processing or results) */}
         {!imageFile && !isProcessing && !result && !error && (
-          <div className="space-y-6">
+          <div className="space-y-6" key={`camera-wrapper-${cameraKey}`}>
             <CameraCapture key={cameraKey} onImageCapture={handleImageCapture} isProcessing={isProcessing} />
           </div>
         )}

@@ -29,31 +29,55 @@ export function CameraCapture({ onImageCapture, isProcessing = false }: CameraCa
 
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    console.log("📁 [CAMERA] handleFileChange triggered")
+    console.log("📁 [CAMERA] handleFileChange triggered, isProcessing:", isProcessing)
     const file = e.target.files?.[0]
     if (file) {
       console.log("📁 [CAMERA] File selected:", file.name, file.type, file.size)
       handleImageSelect(file)
     } else {
-      console.log("📁 [CAMERA] No file selected")
+      console.log("📁 [CAMERA] No file selected or file selection cancelled")
+      // Reset input value if no file selected
+      if (e.target) {
+        e.target.value = ""
+      }
     }
   }
 
   const handleImageSelect = (file: File) => {
     console.log("🖼️ [CAMERA] handleImageSelect called with:", file.name, file.type)
+    
+    // Don't process if already processing
+    if (isProcessing) {
+      console.warn("⚠️ [CAMERA] Already processing, ignoring file selection")
+      return
+    }
+    
     if (file.type.startsWith("image/")) {
-      console.log("🖼️ [CAMERA] Valid image file, creating preview and calling onImageCapture")
-      // Create preview
+      console.log("🖼️ [CAMERA] Valid image file, calling onImageCapture immediately")
+      
+      // IMPORTANT: Call parent callback FIRST to update state immediately
+      // This prevents the component from being unmounted before the callback completes
+      try {
+        onImageCapture(file)
+        console.log("✅ [CAMERA] onImageCapture callback completed successfully")
+      } catch (error) {
+        console.error("❌ [CAMERA] Error in onImageCapture callback:", error)
+        return // Don't create preview if callback fails
+      }
+      
+      // Create preview after callback (non-blocking, won't show if component unmounts)
       const reader = new FileReader()
       reader.onloadend = () => {
-        setPreview(reader.result as string)
-        console.log("🖼️ [CAMERA] Preview created")
+        // Only set preview if component is still mounted and not processing
+        if (!isProcessing) {
+          setPreview(reader.result as string)
+          console.log("🖼️ [CAMERA] Preview created")
+        }
+      }
+      reader.onerror = () => {
+        console.error("❌ [CAMERA] Error reading file for preview")
       }
       reader.readAsDataURL(file)
-      
-      // Pass to parent
-      console.log("🖼️ [CAMERA] Calling onImageCapture callback")
-      onImageCapture(file)
     } else {
       console.error("❌ [CAMERA] Invalid file type:", file.type)
     }
