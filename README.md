@@ -47,10 +47,8 @@ A mobile-first web application that helps users make quick decisions between pro
    GOOGLE_GENERATIVE_AI_API_KEY=your_google_api_key_here
    ```
    
-   Example:
-   ```
-   GOOGLE_GENERATIVE_AI_API_KEY=AIzaSyBLR0IGlsYpdNavSo_g2P_WSdvTtBwozcQ
-   ```
+   **Important:** Replace `your_google_api_key_here` with your actual API key from Google AI Studio.
+   Never commit your real API key to version control!
 
 4. Run the development server:
    ```bash
