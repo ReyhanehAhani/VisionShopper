@@ -291,7 +291,6 @@ export async function POST(request: NextRequest) {
             },
           ],
           temperature: 0.7,
-          maxTokens: 1500,
         })
 
         console.log(`✅ [ANALYZE API] Gemini API call successful with model: ${modelName} - Streaming response`)
