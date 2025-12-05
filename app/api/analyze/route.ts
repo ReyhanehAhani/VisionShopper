@@ -4,7 +4,7 @@ import { streamText } from "ai"
 import { auth } from "@clerk/nextjs/server"
 import { prisma } from "@/lib/prisma"
 
-export const maxDuration = 30
+export const maxDuration = 30 // Maximum duration for API route execution
 
 // Helper function to extract product name from HEADLINE
 function extractProductName(analysisResult: string): string | null {
