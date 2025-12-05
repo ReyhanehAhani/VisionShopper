@@ -160,83 +160,42 @@ export default function Home() {
         throw new Error("No response body")
       }
 
-      // Stream parser with proper buffering to handle incomplete lines
-      let buffer = ''
+      console.log("📡 [HOME] Starting stream parsing...")
+      
+      // toTextStreamResponse() returns plain text, not SDK protocol format
+      // So we can just decode and append directly
+      let accumulatedText = ''
+      let chunkCount = 0
       
       while (true) {
         const { done, value } = await reader.read()
         
-        // Decode chunk and add to buffer
         if (value) {
-          buffer += decoder.decode(value, { stream: true })
+          chunkCount++
+          const decodedChunk = decoder.decode(value, { stream: true })
+          accumulatedText += decodedChunk
+          
+          // Update result in real-time as text comes in
+          setResult(accumulatedText)
+          
+          // Log first few chunks for debugging
+          if (chunkCount <= 3) {
+            console.log(`📦 [HOME] Chunk ${chunkCount} (first 200 chars):`, decodedChunk.substring(0, 200))
+          }
         }
         
         if (done) {
-          // Process any remaining buffer after stream ends
-          if (buffer.trim()) {
-            const finalLines = buffer.split('\n')
-            for (const line of finalLines) {
-              if (line.trim() && line.startsWith('0:')) {
-                try {
-                  const jsonStr = line.substring(2).trim()
-                  if (jsonStr) {
-                    const parsed = JSON.parse(jsonStr)
-                    let textContent = ""
-                    if (typeof parsed === "string") {
-                      textContent = parsed
-                    } else if (parsed && typeof parsed === "object") {
-                      textContent = parsed.textDelta || parsed.text || parsed.content || ""
-                      if (typeof textContent !== "string") {
-                        textContent = String(textContent)
-                      }
-                    }
-                    if (textContent) {
-                      setResult((prev) => prev + textContent)
-                    }
-                  }
-                } catch (e) {
-                  // Skip parsing errors
-                }
-              }
-            }
-          }
-          break
-        }
-
-        // Split by newlines, keep last incomplete line in buffer
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || '' // Keep incomplete line
-
-        // Process complete lines
-        for (const line of lines) {
-          if (!line.trim()) continue
+          console.log(`✅ [HOME] Stream ended. Total chunks: ${chunkCount}, Total text length: ${accumulatedText.length}`)
           
-          if (line.startsWith('0:')) {
-            try {
-              const jsonStr = line.substring(2).trim()
-              if (!jsonStr) continue
-              
-              const parsed = JSON.parse(jsonStr)
-              
-              // Handle both string and object formats
-              let textContent = ""
-              if (typeof parsed === "string") {
-                textContent = parsed
-              } else if (parsed && typeof parsed === "object") {
-                textContent = parsed.textDelta || parsed.text || parsed.content || ""
-                if (typeof textContent !== "string") {
-                  textContent = String(textContent)
-                }
-              }
-              
-              // Append text to result in real-time (it's okay if asterisks show up)
-              if (textContent) {
-                setResult((prev) => prev + textContent)
-              }
-            } catch (e) {
-              // Skip parsing errors
-            }
+          // Final update to ensure all text is captured
+          if (accumulatedText.trim()) {
+            setResult(accumulatedText.trim())
+          } else {
+            console.warn("⚠️ [HOME] Stream completed but no text was received!")
+            setError("Received empty response from server. Please try again.")
           }
+          
+          break
         }
       }
     } catch (err) {
@@ -457,3 +416,4 @@ export default function Home() {
     </main>
   )
 }
+
