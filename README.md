@@ -4,15 +4,15 @@ A mobile-first web application that helps users make quick decisions between pro
 
 ## Features
 
-- 🔐 **User Authentication**: Secure user accounts with Clerk
-- 📸 **Camera/Gallery Upload**: Take a photo or upload from gallery
-- 🤖 **AI Analysis**: Uses Google Gemini 2.5 Flash vision to analyze product images
-- 🆚 **Comparison Mode**: Compare two products side-by-side with battle-style analysis
-- 📊 **Health Score**: Nutri-Score style A-E grading system for product healthiness
-- 📝 **Detailed Analysis**: Flavor profiles, pros/cons, and personalized recommendations
-- 📱 **Mobile-First Design**: Native app-like UI optimized for mobile devices
-- ⚡ **Streaming Responses**: Real-time AI responses using Vercel AI SDK
-- 💾 **Database Ready**: Prisma ORM with PostgreSQL for storing scan history
+- **User Authentication**: Secure user accounts with Clerk
+- **Camera/Gallery Upload**: Take a photo or upload from gallery
+- **AI Analysis**: Uses Google Gemini 2.5 Flash vision to analyze product images
+- **Comparison Mode**: Compare two products side-by-side with battle-style analysis
+- **Health Score**: Nutri-Score style A-E grading system for product healthiness
+- **Detailed Analysis**: Flavor profiles, pros/cons, and personalized recommendations
+- **Mobile-First Design**: Native app-like UI optimized for mobile devices
+- **Streaming Responses**: Real-time AI responses using Vercel AI SDK
+- **Database Ready**: Prisma ORM with PostgreSQL for storing scan history
 
 ## Tech Stack
 
