@@ -8,6 +8,7 @@ import { TrendingUp } from "lucide-react"
 
 interface ParsedAnalysis {
   headline: string
+  healthScore: string // Format: "A - Reason" or just "A"
   whoIsThisFor: string
   flavorTexture: string
   prosCons: string
@@ -30,11 +31,37 @@ export function ResultDisplay({ result, isLoading, onRetry }: ResultDisplayProps
     }
   }, [result])
 
+  // Helper function to parse health score and get color
+  const getHealthScoreDisplay = (healthScore: string) => {
+    if (!healthScore) return null
+
+    // Extract grade (A, B, C, D, or E) and reason
+    const match = healthScore.match(/^([A-E])[ -]*(.*)$/i)
+    if (!match) return null
+
+    const grade = match[1].toUpperCase()
+    const reason = match[2]?.trim() || ''
+
+    // Color mapping
+    const colorMap: Record<string, { bg: string; text: string; border: string }> = {
+      A: { bg: 'bg-green-500', text: 'text-white', border: 'border-green-600' },
+      B: { bg: 'bg-green-400', text: 'text-white', border: 'border-green-500' },
+      C: { bg: 'bg-yellow-400', text: 'text-gray-900', border: 'border-yellow-500' },
+      D: { bg: 'bg-orange-500', text: 'text-white', border: 'border-orange-600' },
+      E: { bg: 'bg-red-500', text: 'text-white', border: 'border-red-600' },
+    }
+
+    const colors = colorMap[grade] || { bg: 'bg-gray-500', text: 'text-white', border: 'border-gray-600' }
+
+    return { grade, reason, colors }
+  }
+
   const parseResult = (text: string) => {
     try {
       // Define the headers we're looking for
       const headers = [
         'HEADLINE:',
+        'HEALTH SCORE:',
         'WHO IS THIS FOR?',
         'FLAVOR & TEXTURE:',
         'PROS & CONS:',
@@ -103,6 +130,7 @@ export function ResultDisplay({ result, isLoading, onRetry }: ResultDisplayProps
       // Extract sections with fallbacks
       const parsed: ParsedAnalysis = {
         headline: sections['HEADLINE:'] || '',
+        healthScore: sections['HEALTH SCORE:'] || '',
         whoIsThisFor: sections['WHO IS THIS FOR?'] || '',
         flavorTexture: sections['FLAVOR & TEXTURE:'] || '',
         prosCons: sections['PROS & CONS:'] || '',
@@ -207,9 +235,11 @@ export function ResultDisplay({ result, isLoading, onRetry }: ResultDisplayProps
   }
 
   if (parsedResult) {
+    const healthScoreDisplay = getHealthScoreDisplay(parsedResult.healthScore)
+
     return (
       <div className="w-full space-y-6">
-        {/* Top Card - Shows HEADLINE */}
+        {/* Top Card - Shows HEADLINE and Health Score */}
         <Card className="border-2 border-primary">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -217,10 +247,25 @@ export function ResultDisplay({ result, isLoading, onRetry }: ResultDisplayProps
               The Verdict
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <p className="text-lg font-medium">
               {parsedResult.headline || "Analysis in progress..."}
             </p>
+            
+            {/* Health Score Badge */}
+            {healthScoreDisplay && (
+              <div className="flex items-center gap-3 pt-2 border-t border-gray-200">
+                <div className={`flex items-center justify-center w-12 h-12 rounded-full ${healthScoreDisplay.colors.bg} ${healthScoreDisplay.colors.text} ${healthScoreDisplay.colors.border} border-2 font-bold text-xl shadow-sm`}>
+                  {healthScoreDisplay.grade}
+                </div>
+                <div className="flex-1">
+                  <div className="text-sm font-semibold text-gray-700">Health Score</div>
+                  {healthScoreDisplay.reason && (
+                    <div className="text-sm text-gray-600">{healthScoreDisplay.reason}</div>
+                  )}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

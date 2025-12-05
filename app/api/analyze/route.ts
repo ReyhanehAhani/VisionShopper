@@ -20,6 +20,16 @@ REQUIRED STRUCTURE (follow exactly):
 HEADLINE:
 [One catchy sentence that captures the essence of the product. Make it engaging and informative.]
 
+HEALTH SCORE:
+Rate the product's healthiness from A to E based on nutritional quality, processing level, sugar/salt content, and natural ingredients.
+- A = Very Healthy (Natural, nutrient-dense, low processed)
+- B = Healthy (Mostly natural, good nutritional profile)
+- C = Moderate (Some processed ingredients, average nutrition)
+- D = Less Healthy (Highly processed, high sugar/salt, few nutrients)
+- E = Unhealthy (Highly processed, very high sugar/salt, minimal nutritional value)
+Format: "HEALTH SCORE: [Grade] - [Short reason]" (e.g., "HEALTH SCORE: D - High sodium content and highly processed ingredients" or "HEALTH SCORE: A - All-natural ingredients, low sugar, high fiber").
+Base your assessment on visible nutritional information, ingredient lists, and processing indicators in the packaging.
+
 WHO IS THIS FOR?
 [One short sentence explaining who would enjoy this product. Example: "Best for chocolate lovers who prefer soft textures" or "Ideal for health-conscious snackers seeking quick energy."]
 
