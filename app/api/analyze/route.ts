@@ -340,7 +340,9 @@ export async function POST(request: NextRequest) {
           console.log("Step 4: Skipping DB save (no authenticated user)")
         }
 
-        return result.toTextStreamResponse()
+        // Use toDataStreamResponse() to get SDK protocol format for robust parsing
+        // This returns lines like "0:\"text\"\n" which can be safely parsed with buffering
+        return result.toDataStreamResponse()
       } catch (modelError: any) {
         console.log(`❌ [ANALYZE API] Model ${modelName} failed:`, modelError?.message || "Unknown error")
         lastError = modelError

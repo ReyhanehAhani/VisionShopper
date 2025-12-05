@@ -160,43 +160,102 @@ export default function Home() {
         throw new Error("No response body")
       }
 
-      console.log("📡 [HOME] Starting stream parsing...")
+      console.log("📡 [HOME] Starting robust buffered stream parsing...")
       
-      // toTextStreamResponse() returns plain text, not SDK protocol format
-      // So we can just decode and append directly
-      let accumulatedText = ''
+      // Robust buffered parsing strategy to handle fragmented chunks
+      // This handles: JSON strings split across chunks, multi-byte characters (emojis),
+      // incomplete lines, and Vercel/Edge buffering differences
+      let buffer = ""
       let chunkCount = 0
+      let textChunksFound = 0
       
-      while (true) {
-        const { done, value } = await reader.read()
-        
-        if (value) {
-          chunkCount++
-          const decodedChunk = decoder.decode(value, { stream: true })
-          accumulatedText += decodedChunk
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
           
-          // Update result in real-time as text comes in
-          setResult(accumulatedText)
+          if (done) {
+            console.log(`✅ [HOME] Stream ended. Chunks: ${chunkCount}, Text chunks: ${textChunksFound}`)
+            
+            // Process any remaining buffer after stream ends
+            if (buffer.trim()) {
+              const finalLines = buffer.split('\n')
+              for (const line of finalLines) {
+                if (line.trim().startsWith('0:')) {
+                  try {
+                    const textContent = JSON.parse(line.substring(2))
+                    if (textContent && typeof textContent === "string") {
+                      textChunksFound++
+                      setResult((prev) => prev + textContent)
+                    }
+                  } catch (e) {
+                    console.warn("⚠️ [HOME] Skipping incomplete/malformed final frame:", line.substring(0, 100))
+                  }
+                }
+              }
+            }
+            
+            // If we got chunks but no text was extracted, show error
+            if (chunkCount > 0 && textChunksFound === 0) {
+              console.error("❌ [HOME] No text chunks found! Buffer preview:", buffer.substring(0, 200))
+              setError("Received stream but couldn't parse text. Please try again.")
+            }
+            
+            break
+          }
           
-          // Log first few chunks for debugging
-          if (chunkCount <= 3) {
-            console.log(`📦 [HOME] Chunk ${chunkCount} (first 200 chars):`, decodedChunk.substring(0, 200))
+          // Decode and add to buffer
+          if (value) {
+            chunkCount++
+            buffer += decoder.decode(value, { stream: true })
+            
+            // Log first few chunks for debugging
+            if (chunkCount <= 3) {
+              console.log(`📦 [HOME] Chunk ${chunkCount} (first 200 chars):`, buffer.substring(0, 200))
+            }
+          }
+          
+          // Split by newline to find complete messages
+          const lines = buffer.split('\n')
+          
+          // Keep the last element in buffer (it might be an incomplete chunk)
+          buffer = lines.pop() || ""
+          
+          // Process complete lines
+          for (const line of lines) {
+            if (line.trim().startsWith('0:')) {
+              try {
+                // Parse JSON string safely (Remove "0:" prefix)
+                const textContent = JSON.parse(line.substring(2))
+                
+                // Handle both string and object formats
+                let text = ""
+                if (typeof textContent === "string") {
+                  text = textContent
+                } else if (textContent && typeof textContent === "object") {
+                  text = textContent.textDelta || textContent.text || textContent.content || ""
+                  if (typeof text !== "string") {
+                    text = String(text)
+                  }
+                }
+                
+                if (text) {
+                  textChunksFound++
+                  setResult((prev) => prev + text)
+                }
+              } catch (e) {
+                // Skip incomplete/malformed frames (JSON might be split across chunks)
+                if (chunkCount <= 5) {
+                  console.warn("⚠️ [HOME] Skipping incomplete/malformed frame:", line.substring(0, 100))
+                }
+              }
+            }
           }
         }
-        
-        if (done) {
-          console.log(`✅ [HOME] Stream ended. Total chunks: ${chunkCount}, Total text length: ${accumulatedText.length}`)
-          
-          // Final update to ensure all text is captured
-          if (accumulatedText.trim()) {
-            setResult(accumulatedText.trim())
-          } else {
-            console.warn("⚠️ [HOME] Stream completed but no text was received!")
-            setError("Received empty response from server. Please try again.")
-          }
-          
-          break
-        }
+      } finally {
+        // CRITICAL: Ensure loading state stops and reader is released
+        setIsProcessing(false)
+        reader?.releaseLock()
+        console.log("✅ [HOME] Stream parser cleanup complete")
       }
     } catch (err) {
       console.error("❌ [HOME] Error processing image:", err)
