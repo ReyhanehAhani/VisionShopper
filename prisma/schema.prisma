@@ -1,0 +1,37 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Scan model to store user scan history
+model Scan {
+  id            String   @id @default(uuid())
+  userId        String   // Clerk user ID
+  imageUrl      String   // Base64 or URL to stored image
+  productName   String?  // Optional product name
+  analysisResult String  @db.Text // Full AI analysis output
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Index for faster queries by userId
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// UserProfile model for user preferences
+model UserProfile {
+  id                String   @id @default(uuid())
+  userId            String   @unique // Clerk user ID (unique)
+  dietaryRestrictions String? // JSON string or comma-separated values
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId])
+}

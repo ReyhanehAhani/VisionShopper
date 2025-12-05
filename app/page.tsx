@@ -1,12 +1,15 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { useUser } from "@clerk/nextjs"
 import { CameraCapture } from "@/components/CameraCapture"
 import { ResultDisplay } from "@/components/ResultDisplay"
+import { Header } from "@/components/Header"
 
 type Mode = 'single' | 'compare'
 
 export default function Home() {
+  const { user, isLoaded } = useUser()
   const [mode, setMode] = useState<Mode>('single')
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imageFile2, setImageFile2] = useState<File | null>(null) // For compare mode
@@ -281,6 +284,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+      <Header />
       <div className="container mx-auto px-4 py-6 max-w-md">
         {/* Header */}
         <div className="text-center mb-6">
@@ -288,6 +292,11 @@ export default function Home() {
           <p className="text-gray-600 text-base mb-4">
             AI Shopping Assistant
           </p>
+          {isLoaded && user && (
+            <p className="text-sm text-gray-500 mb-2">
+              Welcome back, {user.firstName || user.username || 'there'}! 👋
+            </p>
+          )}
           
           {/* Mode Toggle */}
           <div className="flex items-center justify-center gap-2 bg-gray-100 rounded-lg p-1 max-w-xs mx-auto">

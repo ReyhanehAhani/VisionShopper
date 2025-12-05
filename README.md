@@ -4,8 +4,10 @@ A mobile-first web application that helps users make quick decisions between pro
 
 ## Features
 
+- 🔐 **User Authentication**: Secure user accounts with Clerk
 - 📸 **Camera/Gallery Upload**: Take a photo or upload from gallery
 - 🤖 **AI Analysis**: Uses Google Gemini 1.5 Flash vision to analyze product images
+- 🆚 **Comparison Mode**: Compare two products side-by-side
 - 📊 **Quick Comparison**: Concise comparison focusing on taste, ingredients, and features
 - 📱 **Mobile-First Design**: Native app-like UI optimized for mobile devices
 - ⚡ **Streaming Responses**: Real-time AI responses using Vercel AI SDK
@@ -15,6 +17,7 @@ A mobile-first web application that helps users make quick decisions between pro
 - **Framework**: Next.js 14+ (App Router)
 - **Styling**: Tailwind CSS
 - **UI Components**: Shadcn/UI
+- **Authentication**: Clerk
 - **AI**: Google Gemini 1.5 Flash (via Vercel AI SDK)
 - **Deployment**: Vercel
 
@@ -24,6 +27,7 @@ A mobile-first web application that helps users make quick decisions between pro
 
 - Node.js 18+ and npm/yarn/pnpm
 - Google Generative AI API key (Get one free at [Google AI Studio](https://aistudio.google.com/apikey))
+- Clerk account and API keys (Get one free at [Clerk](https://clerk.com))
 
 ### Installation
 
@@ -45,10 +49,19 @@ A mobile-first web application that helps users make quick decisions between pro
    Create a `.env.local` file in the root directory and add:
    ```
    GOOGLE_GENERATIVE_AI_API_KEY=your_google_api_key_here
+   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
+   CLERK_SECRET_KEY=your_clerk_secret_key
    ```
    
-   **Important:** Replace `your_google_api_key_here` with your actual API key from Google AI Studio.
-   Never commit your real API key to version control!
+   **How to get Clerk keys:**
+   1. Sign up for a free account at [clerk.com](https://clerk.com)
+   2. Create a new application
+   3. Go to "API Keys" in your Clerk dashboard
+   4. Copy the "Publishable Key" and "Secret Key"
+   5. Paste them into your `.env.local` file
+   
+   **Important:** Replace all placeholder values with your actual API keys.
+   Never commit your real API keys to version control!
 
 4. Run the development server:
    ```bash
