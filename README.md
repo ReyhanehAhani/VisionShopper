@@ -246,34 +246,6 @@ The score is displayed as a colored badge with a short explanation.
 - Native app-like UI/UX with smooth animations
 - Optimized images using Next.js Image component
 
-## Troubleshooting
-
-### Build Errors
-
-**Prisma Client not found:**
-- Run `npx prisma generate` before building
-- The build script automatically runs this, but you can run it manually
-
-**Middleware errors:**
-- Make sure Clerk environment variables are set in Vercel
-- Check that `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` are correct
-- The middleware will allow requests if Clerk keys are missing (development mode)
-
-**Type errors:**
-- Run `npm install` to ensure all dependencies are installed
-- Make sure you're using Node.js 18+
-
-### Runtime Errors
-
-**500 Internal Server Error:**
-- Check Vercel runtime logs for specific error messages
-- Verify all environment variables are set correctly
-- Ensure Clerk keys are valid and not expired
-
-**Authentication not working:**
-- Verify Clerk keys are set in Vercel
-- Check that sign-in/sign-up routes are accessible
-- Review Clerk dashboard for any configuration issues
 
 ## Additional Documentation
 
