@@ -219,17 +219,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* Debug: Show current state values */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="fixed bottom-4 right-4 p-2 bg-black/80 text-white text-xs rounded z-50 max-w-xs">
-            <div>imageFile: {imageFile ? imageFile.name : 'null'}</div>
-            <div>isProcessing: {String(isProcessing)}</div>
-            <div>result: {result ? `${result.length} chars` : 'empty'}</div>
-            <div>error: {error || 'none'}</div>
-            <div>cameraKey: {cameraKey}</div>
-          </div>
-        )}
-
         {/* Processing State */}
         {isProcessing && (
           <div className="space-y-6">

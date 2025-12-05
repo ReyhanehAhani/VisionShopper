@@ -4,18 +4,15 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
-import { CheckCircle2, XCircle, TrendingUp } from "lucide-react"
+import { TrendingUp } from "lucide-react"
 
-interface ProductComparison {
-  productNames: string[]
+interface ParsedAnalysis {
+  headline: string
+  whoIsThisFor: string
+  flavorTexture: string
+  prosCons: string
   verdict: string
-  comparisons: Array<{
-    product: string
-    flavorProfile: string
-    keyPro: string
-    keyCon: string
-  }>
-  quickSummary: string
+  rawText: string // Fallback if parsing fails
 }
 
 interface ResultDisplayProps {
@@ -25,107 +22,111 @@ interface ResultDisplayProps {
 }
 
 export function ResultDisplay({ result, isLoading, onRetry }: ResultDisplayProps) {
-  const [parsedResult, setParsedResult] = useState<ProductComparison | null>(null)
+  const [parsedResult, setParsedResult] = useState<ParsedAnalysis | null>(null)
 
   useEffect(() => {
-    if (result && !isLoading) {
+    if (result) {
       parseResult(result)
     }
-  }, [result, isLoading])
+  }, [result])
 
   const parseResult = (text: string) => {
-    // Simple parsing logic - in production, you'd want more robust parsing
-    // This is a simplified version that tries to extract structured data
-    
     try {
-      const lines = text.split("\n").filter(line => line.trim())
-      
-      // Extract product names (usually first line or after "Products:")
-      const productNames: string[] = []
-      let verdict = ""
-      const comparisons: ProductComparison["comparisons"] = []
-      let quickSummary = ""
+      // Define the headers we're looking for
+      const headers = [
+        'HEADLINE:',
+        'WHO IS THIS FOR?',
+        'FLAVOR & TEXTURE:',
+        'PROS & CONS:',
+        'VERDICT:'
+      ]
 
-      // Simple regex patterns for extraction
-      const productPattern = /(?:Products?|Product Names?):?\s*(.+)/i
-      const verdictPattern = /(?:Verdict|Recommendation):?\s*(.+)/i
-      
-      let currentProduct: Partial<ProductComparison["comparisons"][0]> | null = null
+      // Split text by headers to extract sections
+      const sections: Record<string, string> = {}
+      let currentSection: string | null = null
+      let currentContent: string[] = []
 
-      lines.forEach((line, index) => {
-        // Try to find product names
-        if (index === 0 || productPattern.test(line)) {
-          const match = line.match(productPattern)
-          if (match) {
-            const products = match[1].split(/[&,]/).map(p => p.trim())
-            productNames.push(...products)
-          } else if (index === 0 && !line.includes(":")) {
-            productNames.push(line.trim())
+      const lines = text.split('\n')
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim()
+        
+        // Check if this line is a header
+        let foundHeader: string | null = null
+        for (const header of headers) {
+          if (line.toUpperCase().startsWith(header.toUpperCase())) {
+            foundHeader = header
+            break
           }
         }
 
-        // Find verdict
-        if (verdictPattern.test(line)) {
-          verdict = line.replace(verdictPattern, "$1").trim()
-        } else if (line.toLowerCase().includes("verdict") && !verdict) {
-          verdict = lines[index + 1]?.trim() || ""
-        }
-
-        // Find flavor profiles
-        if (line.toLowerCase().includes("flavor")) {
-          const flavor = line.split(":")[1]?.trim() || ""
-          if (currentProduct) {
-            currentProduct.flavorProfile = flavor
+        if (foundHeader) {
+          // Save previous section
+          if (currentSection && currentContent.length > 0) {
+            sections[currentSection] = currentContent.join('\n').trim()
           }
-        }
-
-        // Find pros/cons
-        if (line.toLowerCase().includes("pro:") || line.toLowerCase().includes("key pro")) {
-          const pro = line.split(":")[1]?.trim() || ""
-          if (currentProduct) {
-            currentProduct.keyPro = pro
+          // Start new section
+          currentSection = foundHeader
+          currentContent = []
+          // Extract content from same line if there's text after the header
+          // Handle headers with or without colons
+          const colonIndex = line.indexOf(':')
+          if (colonIndex !== -1) {
+            const afterHeader = line.substring(colonIndex + 1).trim()
+            if (afterHeader) {
+              currentContent.push(afterHeader)
+            }
+          } else {
+            // Header without colon (like "WHO IS THIS FOR?")
+            // Check if there's content after the header text
+            const headerUpper = foundHeader.toUpperCase()
+            const lineUpper = line.toUpperCase()
+            const headerIndex = lineUpper.indexOf(headerUpper)
+            if (headerIndex !== -1) {
+              const afterHeader = line.substring(headerIndex + foundHeader.length).trim()
+              if (afterHeader) {
+                currentContent.push(afterHeader)
+              }
+            }
           }
+        } else if (currentSection && line) {
+          // Add to current section
+          currentContent.push(line)
         }
+      }
 
-        if (line.toLowerCase().includes("con:") || line.toLowerCase().includes("key con")) {
-          const con = line.split(":")[1]?.trim() || ""
-          if (currentProduct) {
-            currentProduct.keyCon = con
-          }
-        }
+      // Save last section
+      if (currentSection && currentContent.length > 0) {
+        sections[currentSection] = currentContent.join('\n').trim()
+      }
 
-        // Quick summary (usually last 1-2 sentences)
-        if (line.length > 50 && !line.includes(":") && index > lines.length / 2) {
-          quickSummary += line + " "
-        }
+      // Extract sections with fallbacks
+      const parsed: ParsedAnalysis = {
+        headline: sections['HEADLINE:'] || '',
+        whoIsThisFor: sections['WHO IS THIS FOR?'] || '',
+        flavorTexture: sections['FLAVOR & TEXTURE:'] || '',
+        prosCons: sections['PROS & CONS:'] || '',
+        verdict: sections['VERDICT:'] || '',
+        rawText: text
+      }
+
+      // Only set parsed result if we found at least one section
+      // Otherwise, keep showing raw text (during streaming or if format is unexpected)
+      const hasAnySection = Object.values(parsed).some((value, index) => {
+        // Skip rawText check
+        return index < Object.values(parsed).length - 1 && value.length > 0
       })
 
-      // If we couldn't parse structured data, create a simple display
-      if (productNames.length === 0 && verdict === "") {
-        // Fallback: show raw text in a readable format
-        setParsedResult({
-          productNames: ["Products in image"],
-          verdict: "Analysis complete",
-          comparisons: [],
-          quickSummary: text.substring(0, 200) + (text.length > 200 ? "..." : "")
-        })
+      if (hasAnySection) {
+        setParsedResult(parsed)
       } else {
-        setParsedResult({
-          productNames: productNames.length > 0 ? productNames : ["Product"],
-          verdict: verdict || "Check the comparison below",
-          comparisons: comparisons.length > 0 ? comparisons : [],
-          quickSummary: quickSummary.trim() || text.substring(0, 150)
-        })
+        // While streaming or if no headers found, don't set parsed result yet
+        // This will trigger the raw text display
+        setParsedResult(null)
       }
     } catch (error) {
       console.error("Error parsing result:", error)
-      // Fallback to raw display
-      setParsedResult({
-        productNames: ["Products"],
-        verdict: "Analysis complete",
-        comparisons: [],
-        quickSummary: text.substring(0, 200)
-      })
+      setParsedResult(null)
     }
   }
 
@@ -208,7 +209,7 @@ export function ResultDisplay({ result, isLoading, onRetry }: ResultDisplayProps
   if (parsedResult) {
     return (
       <div className="w-full space-y-6">
-        {/* Verdict Card */}
+        {/* Top Card - Shows HEADLINE */}
         <Card className="border-2 border-primary">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -217,85 +218,55 @@ export function ResultDisplay({ result, isLoading, onRetry }: ResultDisplayProps
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-lg font-medium">{parsedResult.verdict || "Check comparison below"}</p>
+            <p className="text-lg font-medium">
+              {parsedResult.headline || "Analysis in progress..."}
+            </p>
           </CardContent>
         </Card>
 
-        {/* Product Names */}
-        {parsedResult.productNames.length > 0 && (
-          <div>
-            <h3 className="text-lg font-semibold mb-3">Products Identified:</h3>
-            <div className="flex flex-wrap gap-2">
-              {parsedResult.productNames.map((name, idx) => (
-                <span
-                  key={idx}
-                  className="px-3 py-1 rounded-full bg-primary/10 text-primary font-medium text-sm"
-                >
-                  {name}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Comparison Cards */}
-        {parsedResult.comparisons.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {parsedResult.comparisons.map((comp, idx) => (
-              <Card
-                key={idx}
-                className={idx % 2 === 0 ? "border-blue-500" : "border-green-500"}
-              >
-                <CardHeader>
-                  <CardTitle className="text-xl">{comp.product}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Flavor Profile</p>
-                    <p className="text-base">{comp.flavorProfile}</p>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Key Pro</p>
-                      <p className="text-base">{comp.keyPro}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <XCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Key Con</p>
-                      <p className="text-base">{comp.keyCon}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-
-        {/* Quick Summary */}
-        {parsedResult.quickSummary && (
+        {/* Quick Summary Card - Shows WHO IS THIS FOR? */}
+        {parsedResult.whoIsThisFor && (
           <Card>
             <CardHeader>
               <CardTitle>Quick Summary</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-base leading-relaxed">{parsedResult.quickSummary}</p>
+              <p className="text-base leading-relaxed">{parsedResult.whoIsThisFor}</p>
             </CardContent>
           </Card>
         )}
 
-        {/* Raw result fallback if structured parsing didn't work well */}
-        {(parsedResult.comparisons.length === 0 || !parsedResult.quickSummary) && result && (
+        {/* Full Analysis Card - Shows FLAVOR & TEXTURE, PROS & CONS, and VERDICT */}
+        {(parsedResult.flavorTexture || parsedResult.prosCons || parsedResult.verdict) && (
           <Card>
             <CardHeader>
               <CardTitle>Full Analysis</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="whitespace-pre-wrap text-base leading-relaxed">
-                {result}
-              </div>
+            <CardContent className="space-y-4">
+              {parsedResult.flavorTexture && (
+                <div>
+                  <h3 className="text-base font-semibold mb-2">FLAVOR & TEXTURE</h3>
+                  <div className="whitespace-pre-wrap text-base leading-relaxed">
+                    {parsedResult.flavorTexture}
+                  </div>
+                </div>
+              )}
+
+              {parsedResult.prosCons && (
+                <div>
+                  <h3 className="text-base font-semibold mb-2">PROS & CONS</h3>
+                  <div className="whitespace-pre-wrap text-base leading-relaxed">
+                    {parsedResult.prosCons}
+                  </div>
+                </div>
+              )}
+
+              {parsedResult.verdict && (
+                <div>
+                  <h3 className="text-base font-semibold mb-2">VERDICT</h3>
+                  <p className="text-base leading-relaxed">{parsedResult.verdict}</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
