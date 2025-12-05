@@ -231,12 +231,11 @@ export async function POST(request: NextRequest) {
               content: content,
             },
           ],
-          maxTokens: 1500,
           temperature: 0.7,
         })
 
         console.log(`✅ [ANALYZE API] Gemini API call successful with model: ${modelName} - Streaming response`)
-        return result.toDataStreamResponse()
+        return result.toTextStreamResponse()
       } catch (modelError: any) {
         console.log(`❌ [ANALYZE API] Model ${modelName} failed:`, modelError?.message || "Unknown error")
         lastError = modelError

@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^2.0.44",
-    "@clerk/nextjs": "^6.35.6",
+    "@clerk/nextjs": "^5.7.5",
     "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^7.1.0",
     "ai": "^5.0.106",
