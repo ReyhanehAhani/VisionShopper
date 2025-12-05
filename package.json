@@ -9,11 +9,11 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@ai-sdk/google": "^1.2.22",
+    "@ai-sdk/google": "^2.0.44",
     "@clerk/nextjs": "^6.35.6",
     "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^7.1.0",
-    "ai": "^3.0.18",
+    "ai": "^5.0.106",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.3",

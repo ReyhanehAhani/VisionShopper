@@ -1,6 +1,7 @@
 "use client"
 
 import { useRef, useState, useEffect } from "react"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Camera, Upload } from "lucide-react"
 
@@ -118,11 +119,15 @@ export function CameraCapture({ onImageCapture, isProcessing = false, label = "P
     <div className="w-full space-y-4">
       {preview && (
         <div className="relative w-full rounded-lg overflow-hidden border-2 border-primary">
-          <img
-            src={preview}
-            alt="Preview"
-            className="w-full h-auto max-h-[400px] object-contain"
-          />
+          <div className="relative w-full aspect-square max-h-[400px]">
+            <Image
+              src={preview}
+              alt="Preview"
+              fill
+              className="object-contain"
+              unoptimized
+            />
+          </div>
           {!isProcessing && (
             <Button
               type="button"

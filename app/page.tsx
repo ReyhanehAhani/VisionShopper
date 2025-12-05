@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import Image from "next/image"
 import { useUser } from "@clerk/nextjs"
 import { CameraCapture } from "@/components/CameraCapture"
 import { ResultDisplay } from "@/components/ResultDisplay"
@@ -368,11 +369,15 @@ export default function Home() {
                     <div className="absolute top-2 left-2 bg-primary text-white px-2 py-1 rounded text-xs font-semibold z-10">
                       {mode === 'compare' ? 'Product A' : 'Product'}
                     </div>
-                    <img
-                      src={imageUrlRef.current}
-                      alt="Uploaded"
-                      className="w-full h-auto max-h-[400px] object-contain opacity-75"
-                    />
+                    <div className="relative w-full aspect-square max-h-[400px]">
+                      <Image
+                        src={imageUrlRef.current}
+                        alt="Uploaded"
+                        fill
+                        className="object-contain opacity-75"
+                        unoptimized
+                      />
+                    </div>
                   </div>
                 )
               })()}
@@ -386,11 +391,15 @@ export default function Home() {
                     <div className="absolute top-2 left-2 bg-blue-500 text-white px-2 py-1 rounded text-xs font-semibold z-10">
                       Product B
                     </div>
-                    <img
-                      src={imageUrlRef2.current}
-                      alt="Uploaded"
-                      className="w-full h-auto max-h-[400px] object-contain opacity-75"
-                    />
+                    <div className="relative w-full aspect-square max-h-[400px]">
+                      <Image
+                        src={imageUrlRef2.current}
+                        alt="Uploaded"
+                        fill
+                        className="object-contain opacity-75"
+                        unoptimized
+                      />
+                    </div>
                   </div>
                 )
               })()}
