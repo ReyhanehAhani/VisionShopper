@@ -9,6 +9,8 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: env("DATABASE_URL"),
+    // Use a dummy URL during generation if DATABASE_URL is not set
+    // This allows Prisma client generation without an actual database connection
+    url: env("DATABASE_URL") || "postgresql://user:password@localhost:5432/dummy?schema=public",
   },
 });
