@@ -315,11 +315,13 @@ export async function POST(request: NextRequest) {
           try {
             // Get the full text from the stream result and save to database
             result.text.then((fullText) => {
-              // Use placeholder for imageUrl (base64 images are too large for database storage)
-              const imageUrl = "uploaded_image"
+              // Save the actual base64 image (image1) to the database
+              // For compare mode, save the first image; for single mode, save the only image
+              const imageUrlToSave = image1 || "uploaded_image"
+              console.log(`📸 [ANALYZE API] Saving image to database - Length: ${imageUrlToSave.length} chars`)
               
               // Wrap saveScanToDatabase in try/catch
-              saveScanToDatabase(userId!, fullText, imageUrl).then(() => {
+              saveScanToDatabase(userId!, fullText, imageUrlToSave).then(() => {
                 console.log("Step 5: DB Save successful")
               }).catch((dbError: any) => {
                 console.error("DB Save Failed:", dbError)

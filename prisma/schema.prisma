@@ -14,7 +14,7 @@ datasource db {
 model Scan {
   id            String   @id @default(uuid())
   userId        String   // Clerk user ID
-  imageUrl      String   // Base64 or URL to stored image
+  imageUrl      String   @db.Text // Base64 or URL to stored image (Text to handle large base64 strings)
   productName   String?  // Optional product name
   analysisResult String  @db.Text // Full AI analysis output
   createdAt     DateTime @default(now())
