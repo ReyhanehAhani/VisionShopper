@@ -1,9 +1,53 @@
 import { NextRequest } from "next/server"
 import { google } from "@ai-sdk/google"
 import { streamText } from "ai"
+import { auth } from "@clerk/nextjs/server"
+import { prisma } from "@/lib/prisma"
 
-export const runtime = "edge"
 export const maxDuration = 30
+
+// Helper function to extract product name from HEADLINE
+function extractProductName(analysisResult: string): string | null {
+  try {
+    const headlineMatch = analysisResult.match(/HEADLINE:\s*(.+?)(?:\n|$)/i)
+    if (headlineMatch && headlineMatch[1]) {
+      // Clean up the headline - remove extra spaces and trim
+      let headline = headlineMatch[1].trim()
+      // Remove emojis and special characters for a cleaner product name
+      headline = headline.replace(/[^\w\s\-&]/g, '').trim()
+      // Limit length
+      return headline.substring(0, 200) || null
+    }
+  } catch (error) {
+    console.error("❌ [ANALYZE API] Error extracting product name:", error)
+  }
+  return null
+}
+
+// Helper function to save scan to database (async, doesn't block)
+async function saveScanToDatabase(
+  userId: string,
+  analysisResult: string,
+  imageUrl: string
+) {
+  try {
+    const productName = extractProductName(analysisResult)
+    
+    await prisma.scan.create({
+      data: {
+        userId,
+        imageUrl,
+        productName: productName || "Unknown Product",
+        analysisResult,
+      },
+    })
+    
+    console.log(`💾 [ANALYZE API] Scan saved to database for user ${userId}`)
+  } catch (error: any) {
+    // Don't fail the request if database save fails
+    console.error("❌ [ANALYZE API] Failed to save scan to database:", error?.message || error)
+  }
+}
 
 const SYSTEM_PROMPT_SINGLE = `You are an expert shopping assistant and food critic. Provide scannable, concise product analysis using bullet points and emojis.
 
@@ -108,6 +152,21 @@ export async function POST(request: NextRequest) {
   console.log("🚀 [ANALYZE API] Route hit - Starting image analysis request")
 
   try {
+    // Get user ID from Clerk (optional - scan will work without auth)
+    let userId: string | null = null
+    try {
+      const { userId: authUserId } = await auth()
+      userId = authUserId
+      if (userId) {
+        console.log(`👤 [ANALYZE API] Authenticated user: ${userId}`)
+      } else {
+        console.log("👤 [ANALYZE API] No authenticated user - scan will not be saved")
+      }
+    } catch (authError: any) {
+      console.warn("⚠️ [ANALYZE API] Could not get user ID from Clerk:", authError?.message || "Unknown error")
+      // Continue without auth - scan will work but won't be saved
+    }
+
     // Check API key
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY
     if (apiKey) {
@@ -232,9 +291,25 @@ export async function POST(request: NextRequest) {
             },
           ],
           temperature: 0.7,
+          maxTokens: 1500,
         })
 
         console.log(`✅ [ANALYZE API] Gemini API call successful with model: ${modelName} - Streaming response`)
+
+        // If user is authenticated, save scan to database (async, doesn't block streaming)
+        if (userId) {
+          // Get the full text from the stream result and save to database
+          result.text.then((fullText) => {
+            // Use placeholder for imageUrl (base64 images are too large for database storage)
+            const imageUrl = "uploaded_image"
+            saveScanToDatabase(userId!, fullText, imageUrl).catch((error) => {
+              console.error("❌ [ANALYZE API] Error in async database save:", error)
+            })
+          }).catch((error) => {
+            console.error("❌ [ANALYZE API] Error getting full text for database save:", error)
+          })
+        }
+
         return result.toTextStreamResponse()
       } catch (modelError: any) {
         console.log(`❌ [ANALYZE API] Model ${modelName} failed:`, modelError?.message || "Unknown error")
