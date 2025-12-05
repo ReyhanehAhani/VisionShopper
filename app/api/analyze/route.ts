@@ -5,7 +5,7 @@ import { streamText } from "ai"
 export const runtime = "edge"
 export const maxDuration = 30
 
-const SYSTEM_PROMPT = `You are an expert shopping assistant and food critic. Provide scannable, concise product analysis using bullet points and emojis.
+const SYSTEM_PROMPT_SINGLE = `You are an expert shopping assistant and food critic. Provide scannable, concise product analysis using bullet points and emojis.
 
 CRITICAL FORMATTING RULES:
 - Do NOT use markdown asterisks (**), bolding, or hashtags.
@@ -52,11 +52,57 @@ VERDICT:
 [One clear sentence with final recommendation. Answer: Who should buy this? Is it worth it? Keep it to one sentence.]
 
 ADDITIONAL GUIDELINES:
-- If multiple products are shown, compare them directly in the analysis.
 - If nutritional info is visible, mention it briefly in pros/cons (e.g., ✅ High protein or ❌ High sugar).
 - If image is blurry or no products visible, politely ask user to try again.
 - Keep total response concise but informative. Use short sentences throughout.
 - Make it scannable - users should be able to quickly find key information.`
+
+const SYSTEM_PROMPT_COMPARE = `You are an expert shopping assistant and food critic conducting a product comparison battle. Compare two products side-by-side and declare a winner. Provide scannable, concise analysis using bullet points and emojis.
+
+CRITICAL FORMATTING RULES:
+- Do NOT use markdown asterisks (**), bolding, or hashtags.
+- Use emojis for bullet points: ✅ for pros, ❌ for cons, 🔹 for flavor/texture points.
+- Use CAPITALIZATION for section headers.
+- Write short, punchy sentences. Avoid long paragraphs.
+- Keep each bullet point to 1-2 lines maximum.
+- Be specific and informative but concise.
+
+REQUIRED STRUCTURE (follow exactly):
+
+HEADLINE:
+[One catchy comparison title that captures both products. Example: "Chocolate Chip Cookie Battle: Classic vs Premium"]
+
+WINNER:
+[Clearly state which product wins and why in one sentence. Format: "WINNER: [Product Name] - [Brief reason]"]
+
+HEALTH COMPARISON:
+Rate both products' healthiness from A to E. Format:
+- Product A: [Grade] - [Brief reason]
+- Product B: [Grade] - [Brief reason]
+[Include a comparison sentence explaining which is healthier and why.]
+
+FLAVOR FACE-OFF:
+Compare the taste and texture of both products using bullet points:
+🔹 Product A: [Flavor/texture notes]
+🔹 Product B: [Flavor/texture notes]
+🔹 Key Difference: [Main distinction]
+
+PROS & CONS COMPARISON:
+Compare strengths and weaknesses:
+✅ Product A Pros: [Main strengths]
+❌ Product A Cons: [Main weaknesses]
+✅ Product B Pros: [Main strengths]
+❌ Product B Cons: [Main weaknesses]
+
+VERDICT:
+[Final recommendation: Which product should users buy? When would each product be better? Keep it to 2-3 sentences maximum.]
+
+ADDITIONAL GUIDELINES:
+- Be fair and honest in your comparison.
+- If nutritional info is visible, use it in the health comparison.
+- If images are blurry or products not visible, politely ask user to try again.
+- Keep total response concise but informative. Use short sentences throughout.
+- Make it scannable - users should be able to quickly find the winner and key differences.`
 
 export async function POST(request: NextRequest) {
   console.log("🚀 [ANALYZE API] Route hit - Starting image analysis request")
@@ -80,32 +126,57 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get file from form data
-    const formData = await request.formData()
-    const file = formData.get("file") as File
+    // Get JSON body (for compare mode) or FormData (for single mode)
+    const contentType = request.headers.get("content-type") || ""
+    let image1: string
+    let image2: string | null = null
+    let isCompareMode = false
 
-    if (!file) {
-      console.log("❌ [ANALYZE API] No file provided in request")
-      return new Response(
-        JSON.stringify({ error: "No file provided" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      )
+    if (contentType.includes("application/json")) {
+      // JSON body (compare mode)
+      const body = await request.json()
+      image1 = body.image
+      image2 = body.image2 || null
+      isCompareMode = !!image2
+
+      if (!image1) {
+        console.log("❌ [ANALYZE API] No image provided in JSON body")
+        return new Response(
+          JSON.stringify({ error: "No image provided" }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        )
+      }
+
+      console.log(`📁 [ANALYZE API] JSON body received - Image1: ${image1.substring(0, 50)}..., Image2: ${image2 ? image2.substring(0, 50) + '...' : 'null'}`)
+      console.log(`📊 [ANALYZE API] Mode: ${isCompareMode ? 'COMPARE' : 'SINGLE'}`)
+    } else {
+      // FormData (backward compatibility for single mode)
+      const formData = await request.formData()
+      const file = formData.get("file") as File
+
+      if (!file) {
+        console.log("❌ [ANALYZE API] No file provided in request")
+        return new Response(
+          JSON.stringify({ error: "No file provided" }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        )
+      }
+
+      console.log(`📁 [ANALYZE API] File received - Type: ${file.type}, Size: ${file.size} bytes`)
+
+      // Convert file to base64
+      console.log("🔄 [ANALYZE API] Converting image to base64...")
+      const bytes = await file.arrayBuffer()
+      const uint8Array = new Uint8Array(bytes)
+      let binaryString = ""
+      for (let i = 0; i < uint8Array.length; i++) {
+        binaryString += String.fromCharCode(uint8Array[i])
+      }
+      const base64 = btoa(binaryString)
+      const mimeType = file.type || "image/jpeg"
+      image1 = `data:${mimeType};base64,${base64}`
+      console.log(`✅ [ANALYZE API] Image converted - MIME type: ${mimeType}, Base64 length: ${base64.length}`)
     }
-
-    console.log(`📁 [ANALYZE API] File received - Type: ${file.type}, Size: ${file.size} bytes`)
-
-    // Convert file to base64 (edge-compatible)
-    console.log("🔄 [ANALYZE API] Converting image to base64...")
-    const bytes = await file.arrayBuffer()
-    const uint8Array = new Uint8Array(bytes)
-    let binaryString = ""
-    for (let i = 0; i < uint8Array.length; i++) {
-      binaryString += String.fromCharCode(uint8Array[i])
-    }
-    const base64 = btoa(binaryString)
-    const mimeType = file.type || "image/jpeg"
-    const dataUrl = `data:${mimeType};base64,${base64}`
-    console.log(`✅ [ANALYZE API] Image converted - MIME type: ${mimeType}, Base64 length: ${base64.length}`)
 
     // Initialize Google provider and call Gemini API
     console.log("🤖 [ANALYZE API] Initializing Google Gemini model...")
@@ -126,22 +197,38 @@ export async function POST(request: NextRequest) {
       console.log(`📋 [ANALYZE API] Attempting to use model: ${modelName}`)
       
       try {
+        // Select system prompt based on mode
+        const systemPrompt = isCompareMode ? SYSTEM_PROMPT_COMPARE : SYSTEM_PROMPT_SINGLE
+        
+        // Build content array with images
+        const content: any[] = [
+          {
+            type: "text",
+            text: isCompareMode 
+              ? "Compare these two products side-by-side and provide a detailed comparison following the required structure. Identify which product is shown in each image."
+              : "Analyze the products in this image and provide a comprehensive, detailed shopping assistant analysis following the required structure.",
+          },
+          {
+            type: "image",
+            image: image1,
+          },
+        ]
+
+        // Add second image if in compare mode
+        if (isCompareMode && image2) {
+          content.push({
+            type: "image",
+            image: image2,
+          })
+        }
+
         const result = await streamText({
           model: google(modelName),
-          system: SYSTEM_PROMPT,
+          system: systemPrompt,
           messages: [
             {
               role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: "Analyze the products in this image and provide a comprehensive, detailed shopping assistant analysis following the required structure.",
-                },
-                {
-                  type: "image",
-                  image: dataUrl,
-                },
-              ],
+              content: content,
             },
           ],
           maxTokens: 1500,

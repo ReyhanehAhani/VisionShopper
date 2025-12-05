@@ -4,13 +4,18 @@ import { useState, useEffect, useRef } from "react"
 import { CameraCapture } from "@/components/CameraCapture"
 import { ResultDisplay } from "@/components/ResultDisplay"
 
+type Mode = 'single' | 'compare'
+
 export default function Home() {
+  const [mode, setMode] = useState<Mode>('single')
   const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imageFile2, setImageFile2] = useState<File | null>(null) // For compare mode
   const [isProcessing, setIsProcessing] = useState(false)
   const [result, setResult] = useState<string>("")
   const [error, setError] = useState<string | null>(null)
   const [cameraKey, setCameraKey] = useState(0) // Key to force remount
   const imageUrlRef = useRef<string | null>(null)
+  const imageUrlRef2 = useRef<string | null>(null) // For compare mode
 
   // Cleanup blob URL when component unmounts or imageFile changes
   useEffect(() => {
@@ -28,40 +33,101 @@ export default function Home() {
       URL.revokeObjectURL(imageUrlRef.current)
       imageUrlRef.current = null
     }
-  }, [imageFile])
+    if (!imageFile2 && imageUrlRef2.current) {
+      URL.revokeObjectURL(imageUrlRef2.current)
+      imageUrlRef2.current = null
+    }
+  }, [imageFile, imageFile2])
 
-  const handleImageCapture = async (file: File) => {
-    console.log("📸 [HOME] handleImageCapture called with file:", file.name, file.type, file.size)
+  const handleImageCapture = async (file: File, slot: 'first' | 'second' = 'first') => {
+    console.log(`📸 [HOME] handleImageCapture called with file: ${file.name}, slot: ${slot}, mode: ${mode}`)
     
-    // Prevent processing if already processing another image
+    // Prevent processing if already processing
     if (isProcessing) {
-      console.warn("⚠️ [HOME] Already processing an image, ignoring new selection")
+      console.warn("⚠️ [HOME] Already processing, ignoring new selection")
       return
     }
     
-    // Cleanup previous blob URL if it exists
+    // Set the appropriate image file
+    if (slot === 'first') {
+      if (imageUrlRef.current) {
+        URL.revokeObjectURL(imageUrlRef.current)
+        imageUrlRef.current = null
+      }
+      setImageFile(file)
+    } else {
+      if (imageUrlRef2.current) {
+        URL.revokeObjectURL(imageUrlRef2.current)
+        imageUrlRef2.current = null
+      }
+      setImageFile2(file)
+    }
+
+    // In single mode, process immediately
+    // In compare mode, wait for both images
+    if (mode === 'single') {
+      await processImages(file, null)
+    } else {
+      // Compare mode: check if we have both images
+      const currentFirst = slot === 'first' ? file : imageFile
+      const currentSecond = slot === 'second' ? file : imageFile2
+      
+      if (currentFirst && currentSecond) {
+        await processImages(currentFirst, currentSecond)
+      } else {
+        console.log("📸 [HOME] Waiting for second image in compare mode...")
+      }
+    }
+  }
+
+  const processImages = async (file1: File, file2: File | null) => {
+    console.log("🔄 [HOME] processImages called", { file1: file1.name, file2: file2?.name })
+    
+    // Cleanup previous blob URLs
     if (imageUrlRef.current) {
       URL.revokeObjectURL(imageUrlRef.current)
       imageUrlRef.current = null
     }
+    if (imageUrlRef2.current) {
+      URL.revokeObjectURL(imageUrlRef2.current)
+      imageUrlRef2.current = null
+    }
     
-    console.log("📸 [HOME] Setting state: imageFile, isProcessing=true, clearing result and error")
-    // Clear previous state first, then set new state
-    // Use batch update to ensure all state changes happen together
+    // Set state
     setError(null)
     setResult("")
-    setImageFile(file)
     setIsProcessing(true)
 
     try {
-      // Create form data
-      const formData = new FormData()
-      formData.append("file", file)
+      // Convert images to base64
+      const convertToBase64 = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onloadend = () => {
+            const base64 = reader.result as string
+            resolve(base64)
+          }
+          reader.onerror = reject
+          reader.readAsDataURL(file)
+        })
+      }
+
+      const base64Image1 = await convertToBase64(file1)
+      const base64Image2 = file2 ? await convertToBase64(file2) : null
+
+      // Create JSON body
+      const body = JSON.stringify({
+        image: base64Image1,
+        image2: base64Image2,
+      })
 
       // Call the API
       const response = await fetch("/api/analyze", {
         method: "POST",
-        body: formData,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: body,
       })
 
       if (!response.ok) {
@@ -183,10 +249,14 @@ export default function Home() {
 
   const handleRetry = () => {
     console.log("🔄 [HOME] handleRetry called - clearing all state")
-    // Cleanup blob URL
+    // Cleanup blob URLs
     if (imageUrlRef.current) {
       URL.revokeObjectURL(imageUrlRef.current)
       imageUrlRef.current = null
+    }
+    if (imageUrlRef2.current) {
+      URL.revokeObjectURL(imageUrlRef2.current)
+      imageUrlRef2.current = null
     }
     
     // Clear all state - React will batch these updates
@@ -194,6 +264,7 @@ export default function Home() {
     setResult("")
     setIsProcessing(false)
     setImageFile(null)
+    setImageFile2(null)
     
     // Increment key to force CameraCapture remount
     // This happens in the same render cycle, so it's safe
@@ -201,42 +272,120 @@ export default function Home() {
     console.log("🔄 [HOME] State cleared, cameraKey incremented")
   }
 
+  const handleModeChange = (newMode: Mode) => {
+    if (isProcessing) return // Don't allow mode change while processing
+    setMode(newMode)
+    // Clear images when switching modes
+    handleRetry()
+  }
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       <div className="container mx-auto px-4 py-6 max-w-md">
         {/* Header */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">QuickPick</h1>
-          <p className="text-gray-600 text-base">
+          <p className="text-gray-600 text-base mb-4">
             AI Shopping Assistant
           </p>
+          
+          {/* Mode Toggle */}
+          <div className="flex items-center justify-center gap-2 bg-gray-100 rounded-lg p-1 max-w-xs mx-auto">
+            <button
+              type="button"
+              onClick={() => handleModeChange('single')}
+              className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                mode === 'single'
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Single Scan
+            </button>
+            <button
+              type="button"
+              onClick={() => handleModeChange('compare')}
+              className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                mode === 'compare'
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Compare Two
+            </button>
+          </div>
         </div>
 
         {/* Camera Capture - Show when ready to capture (no active processing or results) */}
-        {!imageFile && !isProcessing && !result && !error && (
+        {!isProcessing && !result && !error && (mode === 'single' ? !imageFile : (!imageFile || !imageFile2)) && (
           <div className="space-y-6" key={`camera-wrapper-${cameraKey}`}>
-            <CameraCapture key={cameraKey} onImageCapture={handleImageCapture} isProcessing={isProcessing} />
+            {mode === 'single' ? (
+              <CameraCapture 
+                key={cameraKey} 
+                onImageCapture={(file) => handleImageCapture(file, 'first')} 
+                isProcessing={isProcessing}
+                label="Product"
+              />
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                <CameraCapture 
+                  key={`${cameraKey}-1`} 
+                  onImageCapture={(file) => handleImageCapture(file, 'first')} 
+                  isProcessing={isProcessing}
+                  label="Product A"
+                />
+                <CameraCapture 
+                  key={`${cameraKey}-2`} 
+                  onImageCapture={(file) => handleImageCapture(file, 'second')} 
+                  isProcessing={isProcessing}
+                  label="Product B"
+                />
+              </div>
+            )}
           </div>
         )}
 
         {/* Processing State */}
         {isProcessing && (
           <div className="space-y-6">
-            {imageFile && (() => {
-              // Create blob URL if not already created
-              if (!imageUrlRef.current) {
-                imageUrlRef.current = URL.createObjectURL(imageFile)
-              }
-              return (
-                <div className="relative w-full rounded-lg overflow-hidden border-2 border-primary">
-                  <img
-                    src={imageUrlRef.current}
-                    alt="Uploaded"
-                    className="w-full h-auto max-h-[400px] object-contain opacity-75"
-                  />
-                </div>
-              )
-            })()}
+            <div className={`grid gap-4 ${mode === 'compare' && imageFile2 ? 'grid-cols-2' : ''}`}>
+              {imageFile && (() => {
+                // Create blob URL if not already created
+                if (!imageUrlRef.current) {
+                  imageUrlRef.current = URL.createObjectURL(imageFile)
+                }
+                return (
+                  <div className="relative rounded-lg overflow-hidden border-2 border-primary">
+                    <div className="absolute top-2 left-2 bg-primary text-white px-2 py-1 rounded text-xs font-semibold z-10">
+                      {mode === 'compare' ? 'Product A' : 'Product'}
+                    </div>
+                    <img
+                      src={imageUrlRef.current}
+                      alt="Uploaded"
+                      className="w-full h-auto max-h-[400px] object-contain opacity-75"
+                    />
+                  </div>
+                )
+              })()}
+              {imageFile2 && mode === 'compare' && (() => {
+                // Create blob URL if not already created
+                if (!imageUrlRef2.current) {
+                  imageUrlRef2.current = URL.createObjectURL(imageFile2)
+                }
+                return (
+                  <div className="relative rounded-lg overflow-hidden border-2 border-blue-500">
+                    <div className="absolute top-2 left-2 bg-blue-500 text-white px-2 py-1 rounded text-xs font-semibold z-10">
+                      Product B
+                    </div>
+                    <img
+                      src={imageUrlRef2.current}
+                      alt="Uploaded"
+                      className="w-full h-auto max-h-[400px] object-contain opacity-75"
+                    />
+                  </div>
+                )
+              })()}
+            </div>
             <ResultDisplay result={result || ""} isLoading={true} onRetry={handleRetry} />
           </div>
         )}

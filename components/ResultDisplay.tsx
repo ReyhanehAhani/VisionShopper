@@ -8,10 +8,14 @@ import { TrendingUp } from "lucide-react"
 
 interface ParsedAnalysis {
   headline: string
+  winner: string // For compare mode
   healthScore: string // Format: "A - Reason" or just "A"
+  healthComparison: string // For compare mode
   whoIsThisFor: string
   flavorTexture: string
+  flavorFaceOff: string // For compare mode
   prosCons: string
+  prosConsComparison: string // For compare mode
   verdict: string
   rawText: string // Fallback if parsing fails
 }
@@ -58,13 +62,17 @@ export function ResultDisplay({ result, isLoading, onRetry }: ResultDisplayProps
 
   const parseResult = (text: string) => {
     try {
-      // Define the headers we're looking for
+      // Define the headers we're looking for (supports both single and compare modes)
       const headers = [
         'HEADLINE:',
+        'WINNER:',
         'HEALTH SCORE:',
+        'HEALTH COMPARISON:',
         'WHO IS THIS FOR?',
         'FLAVOR & TEXTURE:',
+        'FLAVOR FACE-OFF:',
         'PROS & CONS:',
+        'PROS & CONS COMPARISON:',
         'VERDICT:'
       ]
 
@@ -130,10 +138,14 @@ export function ResultDisplay({ result, isLoading, onRetry }: ResultDisplayProps
       // Extract sections with fallbacks
       const parsed: ParsedAnalysis = {
         headline: sections['HEADLINE:'] || '',
+        winner: sections['WINNER:'] || '',
         healthScore: sections['HEALTH SCORE:'] || '',
+        healthComparison: sections['HEALTH COMPARISON:'] || '',
         whoIsThisFor: sections['WHO IS THIS FOR?'] || '',
         flavorTexture: sections['FLAVOR & TEXTURE:'] || '',
+        flavorFaceOff: sections['FLAVOR FACE-OFF:'] || '',
         prosCons: sections['PROS & CONS:'] || '',
+        prosConsComparison: sections['PROS & CONS COMPARISON:'] || '',
         verdict: sections['VERDICT:'] || '',
         rawText: text
       }
@@ -239,21 +251,29 @@ export function ResultDisplay({ result, isLoading, onRetry }: ResultDisplayProps
 
     return (
       <div className="w-full space-y-6">
-        {/* Top Card - Shows HEADLINE and Health Score */}
+        {/* Top Card - Shows HEADLINE/WINNER and Health Score */}
         <Card className="border-2 border-primary">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-primary" />
-              The Verdict
+              {parsedResult.winner ? 'Comparison Result' : 'The Verdict'}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-lg font-medium">
               {parsedResult.headline || "Analysis in progress..."}
             </p>
+
+            {/* Winner (Compare Mode) */}
+            {parsedResult.winner && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <div className="text-sm font-semibold text-green-800 mb-1">🏆 WINNER</div>
+                <p className="text-base text-green-900">{parsedResult.winner}</p>
+              </div>
+            )}
             
-            {/* Health Score Badge */}
-            {healthScoreDisplay && (
+            {/* Health Score Badge (Single Mode) */}
+            {healthScoreDisplay && !parsedResult.winner && (
               <div className="flex items-center gap-3 pt-2 border-t border-gray-200">
                 <div className={`flex items-center justify-center w-12 h-12 rounded-full ${healthScoreDisplay.colors.bg} ${healthScoreDisplay.colors.text} ${healthScoreDisplay.colors.border} border-2 font-bold text-xl shadow-sm`}>
                   {healthScoreDisplay.grade}
@@ -281,13 +301,26 @@ export function ResultDisplay({ result, isLoading, onRetry }: ResultDisplayProps
           </Card>
         )}
 
-        {/* Full Analysis Card - Shows FLAVOR & TEXTURE, PROS & CONS, and VERDICT */}
-        {(parsedResult.flavorTexture || parsedResult.prosCons || parsedResult.verdict) && (
+        {/* Full Analysis Card - Shows all sections */}
+        {(parsedResult.flavorTexture || parsedResult.flavorFaceOff || 
+          parsedResult.prosCons || parsedResult.prosConsComparison || 
+          parsedResult.healthComparison || parsedResult.verdict) && (
           <Card>
             <CardHeader>
               <CardTitle>Full Analysis</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Health Comparison (Compare Mode) */}
+              {parsedResult.healthComparison && (
+                <div>
+                  <h3 className="text-base font-semibold mb-2">HEALTH COMPARISON</h3>
+                  <div className="whitespace-pre-wrap text-base leading-relaxed">
+                    {parsedResult.healthComparison}
+                  </div>
+                </div>
+              )}
+
+              {/* Flavor & Texture (Single Mode) */}
               {parsedResult.flavorTexture && (
                 <div>
                   <h3 className="text-base font-semibold mb-2">FLAVOR & TEXTURE</h3>
@@ -297,11 +330,32 @@ export function ResultDisplay({ result, isLoading, onRetry }: ResultDisplayProps
                 </div>
               )}
 
+              {/* Flavor Face-Off (Compare Mode) */}
+              {parsedResult.flavorFaceOff && (
+                <div>
+                  <h3 className="text-base font-semibold mb-2">FLAVOR FACE-OFF</h3>
+                  <div className="whitespace-pre-wrap text-base leading-relaxed">
+                    {parsedResult.flavorFaceOff}
+                  </div>
+                </div>
+              )}
+
+              {/* Pros & Cons (Single Mode) */}
               {parsedResult.prosCons && (
                 <div>
                   <h3 className="text-base font-semibold mb-2">PROS & CONS</h3>
                   <div className="whitespace-pre-wrap text-base leading-relaxed">
                     {parsedResult.prosCons}
+                  </div>
+                </div>
+              )}
+
+              {/* Pros & Cons Comparison (Compare Mode) */}
+              {parsedResult.prosConsComparison && (
+                <div>
+                  <h3 className="text-base font-semibold mb-2">PROS & CONS COMPARISON</h3>
+                  <div className="whitespace-pre-wrap text-base leading-relaxed">
+                    {parsedResult.prosConsComparison}
                   </div>
                 </div>
               )}

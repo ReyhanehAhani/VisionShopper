@@ -7,9 +7,10 @@ import { Camera, Upload } from "lucide-react"
 interface CameraCaptureProps {
   onImageCapture: (file: File) => void
   isProcessing?: boolean
+  label?: string
 }
 
-export function CameraCapture({ onImageCapture, isProcessing = false }: CameraCaptureProps) {
+export function CameraCapture({ onImageCapture, isProcessing = false, label = "Product" }: CameraCaptureProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const [preview, setPreview] = useState<string | null>(null)
@@ -146,7 +147,7 @@ export function CameraCapture({ onImageCapture, isProcessing = false }: CameraCa
             disabled={isProcessing}
           >
             <Camera className="mr-2 h-6 w-6" />
-            Scan Products
+            Scan {label}
           </Button>
 
           <Button
