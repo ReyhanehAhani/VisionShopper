@@ -1,11 +1,11 @@
 import { auth } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
 import { prisma } from "@/lib/prisma"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Header } from "@/components/Header"
+import { ScanCard } from "@/components/ScanCard"
 import Link from "next/link"
-import Image from "next/image"
 import { ShoppingBag, Plus } from "lucide-react"
 
 export default async function DashboardPage() {
@@ -92,45 +92,15 @@ export default async function DashboardPage() {
         ) : (
           /* Scans Grid */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {scans.map((scan) => {
-              const hasValidImage = isValidBase64Image(scan.imageUrl)
-              
-              return (
-                <Link key={scan.id} href={`/dashboard/${scan.id}`}>
-                  <Card className="h-full hover:shadow-lg transition-shadow cursor-pointer">
-                    <CardHeader>
-                      <div className="flex items-start justify-between mb-2">
-                        {/* Image or Fallback Icon */}
-                        {hasValidImage ? (
-                          <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 bg-gray-100">
-                            <Image
-                              src={scan.imageUrl!}
-                              alt={scan.productName || "Product"}
-                              fill
-                              className="object-cover"
-                              unoptimized
-                            />
-                          </div>
-                        ) : (
-                          <div className="text-4xl">🛍️</div>
-                        )}
-                        <span className="text-xs text-gray-500">
-                          {formatDate(scan.createdAt)}
-                        </span>
-                      </div>
-                      <CardTitle className="text-lg">
-                        {scan.productName || "Unknown Product"}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-sm text-gray-600 line-clamp-3">
-                        {getSnippet(scan.analysisResult)}
-                      </p>
-                    </CardContent>
-                  </Card>
-                </Link>
-              )
-            })}
+            {scans.map((scan) => (
+              <ScanCard
+                key={scan.id}
+                scan={scan}
+                formatDate={formatDate}
+                getSnippet={getSnippet}
+                isValidBase64Image={isValidBase64Image}
+              />
+            ))}
           </div>
         )}
 
