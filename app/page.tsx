@@ -160,50 +160,59 @@ export default function Home() {
         throw new Error("No response body")
       }
 
-      console.log("📡 [HOME] Starting robust buffered stream parsing...")
+      console.log("📡 [HOME] Starting hybrid stream parser (handles both protocol & plain text)...")
       
-      // Robust buffered parsing strategy to handle fragmented chunks
-      // This handles: JSON strings split across chunks, multi-byte characters (emojis),
-      // incomplete lines, and Vercel/Edge buffering differences
+      // Hybrid/Universal Parser Strategy:
+      // 1. Try to parse as SDK protocol format (lines starting with "0:")
+      // 2. Fallback to plain text if no protocol lines are found
+      let resultText = ""
       let buffer = ""
       let chunkCount = 0
-      let textChunksFound = 0
       
       try {
         while (true) {
           const { done, value } = await reader.read()
           
           if (done) {
-            console.log(`✅ [HOME] Stream ended. Chunks: ${chunkCount}, Text chunks: ${textChunksFound}`)
+            console.log(`✅ [HOME] Stream ended. Chunks: ${chunkCount}, Text length: ${resultText.length}`)
             
             // Process any remaining buffer after stream ends
             if (buffer.trim()) {
-              const finalLines = buffer.split('\n')
-              for (const line of finalLines) {
+              const lines = buffer.split('\n')
+              let hasProtocol = false
+              
+              for (const line of lines) {
                 if (line.trim().startsWith('0:')) {
+                  hasProtocol = true
                   try {
                     const textContent = JSON.parse(line.substring(2))
-                    if (textContent && typeof textContent === "string") {
-                      textChunksFound++
+                    if (typeof textContent === "string") {
+                      resultText += textContent
                       setResult((prev) => prev + textContent)
                     }
                   } catch (e) {
-                    console.warn("⚠️ [HOME] Skipping incomplete/malformed final frame:", line.substring(0, 100))
+                    // Ignore malformed protocol lines
                   }
                 }
+              }
+              
+              // If no protocol, treat as plain text
+              if (!hasProtocol && buffer.trim()) {
+                resultText += buffer
+                setResult((prev) => prev + buffer)
               }
             }
             
             // If we got chunks but no text was extracted, show error
-            if (chunkCount > 0 && textChunksFound === 0) {
-              console.error("❌ [HOME] No text chunks found! Buffer preview:", buffer.substring(0, 200))
+            if (chunkCount > 0 && resultText.length === 0) {
+              console.error("❌ [HOME] No text extracted! Buffer preview:", buffer.substring(0, 200))
               setError("Received stream but couldn't parse text. Please try again.")
             }
             
             break
           }
           
-          // Decode and add to buffer
+          // Decode chunk and add to buffer
           if (value) {
             chunkCount++
             buffer += decoder.decode(value, { stream: true })
@@ -220,37 +229,40 @@ export default function Home() {
           // Keep the last element in buffer (it might be an incomplete chunk)
           buffer = lines.pop() || ""
           
-          // Process complete lines
+          // STRATEGY: Try to parse as protocol, but fallback to raw text
+          // 1. If it looks like protocol (starts with 0:"), parse it.
+          // 2. OTHERWISE, just append the chunk directly.
+          
+          let chunkHasProtocol = false
+          
           for (const line of lines) {
             if (line.trim().startsWith('0:')) {
+              chunkHasProtocol = true
               try {
-                // Parse JSON string safely (Remove "0:" prefix)
                 const textContent = JSON.parse(line.substring(2))
-                
-                // Handle both string and object formats
-                let text = ""
                 if (typeof textContent === "string") {
-                  text = textContent
-                } else if (textContent && typeof textContent === "object") {
-                  text = textContent.textDelta || textContent.text || textContent.content || ""
-                  if (typeof text !== "string") {
-                    text = String(text)
-                  }
-                }
-                
-                if (text) {
-                  textChunksFound++
-                  setResult((prev) => prev + text)
+                  resultText += textContent
+                  setResult((prev) => prev + textContent)
                 }
               } catch (e) {
-                // Skip incomplete/malformed frames (JSON might be split across chunks)
-                if (chunkCount <= 5) {
-                  console.warn("⚠️ [HOME] Skipping incomplete/malformed frame:", line.substring(0, 100))
-                }
+                // Ignore malformed protocol lines
               }
             }
           }
+          
+          // FALLBACK: If no protocol lines were found in this chunk, assume it's raw text
+          if (!chunkHasProtocol && lines.length > 0) {
+            // Append all non-protocol lines as plain text
+            const plainText = lines.filter(line => !line.trim().startsWith('0:')).join('\n')
+            if (plainText) {
+              resultText += plainText + '\n'
+              setResult((prev) => prev + plainText + '\n')
+            }
+          }
         }
+      } catch (error) {
+        console.error("❌ [HOME] Stream reading failed:", error)
+        setError(`Stream error: ${error instanceof Error ? error.message : 'Unknown error'}`)
       } finally {
         // CRITICAL: Ensure loading state stops and reader is released
         setIsProcessing(false)
