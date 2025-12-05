@@ -4,7 +4,12 @@ import { streamText } from "ai"
 import { auth } from "@clerk/nextjs/server"
 import { prisma } from "@/lib/prisma"
 
-export const maxDuration = 30 // Maximum duration for API route execution
+// Force Node.js runtime for Prisma compatibility
+export const runtime = 'nodejs'
+// Allow up to 60s for AI analysis (Pro plan) or max Hobby limits
+export const maxDuration = 60
+// Force dynamic rendering
+export const dynamic = 'force-dynamic'
 
 // Helper function to extract product name from HEADLINE
 function extractProductName(analysisResult: string): string | null {
@@ -149,20 +154,25 @@ ADDITIONAL GUIDELINES:
 - Make it scannable - users should be able to quickly find the winner and key differences.`
 
 export async function POST(request: NextRequest) {
+  console.log("Step 1: Request received")
   console.log("🚀 [ANALYZE API] Route hit - Starting image analysis request")
 
   try {
-    // Get user ID from Clerk (optional - scan will work without auth)
+    // Step 2: Get user ID from Clerk (optional - scan will work without auth)
     let userId: string | null = null
     try {
+      console.log("Step 2: Connecting to Clerk...")
       const { userId: authUserId } = await auth()
       userId = authUserId
       if (userId) {
+        console.log(`Step 2: Connected to Clerk, UserId: ${userId}`)
         console.log(`👤 [ANALYZE API] Authenticated user: ${userId}`)
       } else {
+        console.log("Step 2: Connected to Clerk, UserId: null (no authenticated user)")
         console.log("👤 [ANALYZE API] No authenticated user - scan will not be saved")
       }
     } catch (authError: any) {
+      console.warn("Step 2: Clerk connection failed (continuing without auth):", authError?.message || "Unknown error")
       console.warn("⚠️ [ANALYZE API] Could not get user ID from Clerk:", authError?.message || "Unknown error")
       // Continue without auth - scan will work but won't be saved
     }
@@ -281,6 +291,7 @@ export async function POST(request: NextRequest) {
           })
         }
 
+        console.log("Step 3: Starting Google AI stream...")
         const result = await streamText({
           model: google(modelName),
           system: systemPrompt,
@@ -294,20 +305,39 @@ export async function POST(request: NextRequest) {
           // Token limit is controlled by system prompt instructions
         })
 
+        console.log(`Step 3: AI Stream finished, preparing response...`)
         console.log(`✅ [ANALYZE API] Gemini API call successful with model: ${modelName} - Streaming response`)
 
-        // If user is authenticated, save scan to database (async, doesn't block streaming)
+        // Step 4: If user is authenticated, save scan to database (async, doesn't block streaming)
         if (userId) {
-          // Get the full text from the stream result and save to database
-          result.text.then((fullText) => {
-            // Use placeholder for imageUrl (base64 images are too large for database storage)
-            const imageUrl = "uploaded_image"
-            saveScanToDatabase(userId!, fullText, imageUrl).catch((error) => {
-              console.error("❌ [ANALYZE API] Error in async database save:", error)
+          console.log("Step 4: AI Stream finished, saving to DB...")
+          // Wrap DB save in its own try/catch to prevent crashes
+          try {
+            // Get the full text from the stream result and save to database
+            result.text.then((fullText) => {
+              // Use placeholder for imageUrl (base64 images are too large for database storage)
+              const imageUrl = "uploaded_image"
+              
+              // Wrap saveScanToDatabase in try/catch
+              saveScanToDatabase(userId!, fullText, imageUrl).then(() => {
+                console.log("Step 5: DB Save successful")
+              }).catch((dbError: any) => {
+                console.error("DB Save Failed:", dbError)
+                console.error("❌ [ANALYZE API] Error in async database save:", dbError?.message || dbError)
+                // Don't crash - user will still see the analysis
+              })
+            }).catch((textError: any) => {
+              console.error("DB Save Failed: Could not get full text from stream:", textError)
+              console.error("❌ [ANALYZE API] Error getting full text for database save:", textError?.message || textError)
+              // Don't crash - user will still see the analysis
             })
-          }).catch((error) => {
-            console.error("❌ [ANALYZE API] Error getting full text for database save:", error)
-          })
+          } catch (dbInitError: any) {
+            console.error("DB Save Failed: Error initializing DB save:", dbInitError)
+            console.error("❌ [ANALYZE API] Error setting up database save:", dbInitError?.message || dbInitError)
+            // Don't crash - continue with streaming response
+          }
+        } else {
+          console.log("Step 4: Skipping DB save (no authenticated user)")
         }
 
         return result.toTextStreamResponse()
@@ -322,21 +352,33 @@ export async function POST(request: NextRequest) {
     // If we get here, all models failed - throw the last error
     throw lastError || new Error("All model attempts failed")
   } catch (error: any) {
-    // Catch any other unexpected errors
-    console.error("❌ [ANALYZE API] Unexpected Error:")
-    console.error("   Error type:", error?.constructor?.name || "Unknown")
-    console.error("   Error message:", error?.message || "No message")
-    console.error("   Error stack:", error?.stack || "No stack")
-    console.error("   Full error object:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2))
-
+    // Global error handler - return specific error messages
+    const errorType = error?.constructor?.name || "Unknown"
     const errorMessage = error?.message || "An unexpected error occurred"
+    const errorStack = error?.stack || "No stack trace available"
+    const errorDetails = error?.cause?.message || error?.statusText || "No additional details"
+
+    console.error("❌ [ANALYZE API] Global Error Handler - Unexpected Error:")
+    console.error("   Error type:", errorType)
+    console.error("   Error message:", errorMessage)
+    console.error("   Error details:", errorDetails)
+    console.error("   Error stack:", errorStack)
     
+    // Log full error object in development
+    if (process.env.NODE_ENV === "development") {
+      console.error("   Full error object:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2))
+    }
+
+    // Return detailed error response with specific error message
     return new Response(
       JSON.stringify({ 
         error: "Failed to analyze image",
         message: errorMessage,
-        details: error?.cause?.message || error?.statusText || "No additional details",
-        fullError: process.env.NODE_ENV === "development" ? String(error) : undefined
+        type: errorType,
+        details: errorDetails,
+        // Only include stack in development
+        stack: process.env.NODE_ENV === "development" ? errorStack : undefined,
+        timestamp: new Date().toISOString()
       }),
       {
         status: 500,
